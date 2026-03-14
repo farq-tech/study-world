@@ -31,15 +31,16 @@ app.use('/api', routes);
 // Error handler (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(env.PORT, () => {
-  logger.info(`🚀 عالم الدراسة API running on port ${env.PORT}`);
-  logger.info(`📚 Environment: ${env.NODE_ENV}`);
+// Start server only when not running as a Vercel serverless function
+if (!process.env.VERCEL) {
+  app.listen(env.PORT, () => {
+    logger.info(`🚀 عالم الدراسة API running on port ${env.PORT}`);
+    logger.info(`📚 Environment: ${env.NODE_ENV}`);
 
-  // Start scheduled jobs
-  if (env.NODE_ENV !== 'test') {
-    startScheduler();
-  }
-});
+    if (env.NODE_ENV !== 'test') {
+      startScheduler();
+    }
+  });
+}
 
 export default app;
