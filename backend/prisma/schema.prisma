@@ -1,0 +1,399 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  PARENT
+  ADMIN
+}
+
+enum HomeworkStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+}
+
+enum QuizType {
+  DAILY
+  WEEKLY
+  MATH_FOCUS
+  CHAPTER
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+}
+
+enum NotificationType {
+  HOMEWORK
+  QUIZ
+  BADGE
+  REMINDER
+  GRADE
+  SYSTEM
+}
+
+enum HolidayType {
+  NATIONAL
+  SCHOOL_BREAK
+  CUSTOM
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String    @map("password_hash")
+  nameAr       String    @map("name_ar")
+  nameEn       String?   @map("name_en")
+  role         UserRole  @default(STUDENT)
+  avatarUrl    String?   @map("avatar_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  student       Student?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Student {
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id")
+  gradeLevel     String    @default("الصف الثالث الابتدائي") @map("grade_level")
+  className      String    @default("الثالث أ") @map("class_name")
+  points         Int       @default(0)
+  level          Int       @default(1)
+  currentStreak  Int       @default(0) @map("current_streak")
+  longestStreak  Int       @default(0) @map("longest_streak")
+  lastActivityAt DateTime? @map("last_activity_at")
+  parentId       String?   @map("parent_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentSubjects StudentSubject[]
+  schedules       Schedule[]
+  homeworks       Homework[]
+  quizAttempts    QuizAttempt[]
+  grades          Grade[]
+  studentBadges   StudentBadge[]
+  weaknessAreas   WeaknessArea[]
+  lessons         Lesson[]
+
+  @@map("students")
+}
+
+model Subject {
+  id        String   @id @default(uuid())
+  nameAr    String   @map("name_ar")
+  nameEn    String?  @map("name_en")
+  slug      String   @unique
+  icon      String?
+  color     String?
+  isMathFocus Boolean @default(false) @map("is_math_focus")
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  studentSubjects StudentSubject[]
+  schedules       Schedule[]
+  lessons         Lesson[]
+  homeworks       Homework[]
+  quizzes         Quiz[]
+  grades          Grade[]
+  weaknessAreas   WeaknessArea[]
+  teachers        TeacherSubject[]
+
+  @@map("subjects")
+}
+
+model Teacher {
+  id        String   @id @default(uuid())
+  nameAr    String   @map("name_ar")
+  nameEn    String?  @map("name_en")
+  phone     String?
+  email     String?
+  note      String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subjects  TeacherSubject[]
+  schedules Schedule[]
+
+  @@map("teachers")
+}
+
+model TeacherSubject {
+  id        String @id @default(uuid())
+  teacherId String @map("teacher_id")
+  subjectId String @map("subject_id")
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subjectId])
+  @@map("teacher_subjects")
+}
+
+model StudentSubject {
+  id        String @id @default(uuid())
+  studentId String @map("student_id")
+  subjectId String @map("subject_id")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId])
+  @@map("student_subjects")
+}
+
+model Schedule {
+  id           String    @id @default(uuid())
+  studentId    String    @map("student_id")
+  subjectId    String    @map("subject_id")
+  teacherId    String?   @map("teacher_id")
+  dayOfWeek    DayOfWeek @map("day_of_week")
+  periodNumber Int       @map("period_number")
+  startTime    String    @map("start_time")
+  endTime      String    @map("end_time")
+  room         String?
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher Teacher? @relation(fields: [teacherId], references: [id])
+
+  @@unique([studentId, dayOfWeek, periodNumber])
+  @@map("schedules")
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  studentId   String?  @map("student_id")
+  subjectId   String   @map("subject_id")
+  title       String
+  content     String?  @db.Text
+  keyPoints   String?  @db.Text @map("key_points")
+  importantTerms String? @db.Text @map("important_terms")
+  aiSummary   String?  @db.Text @map("ai_summary")
+  warmupQuestions Json? @map("warmup_questions")
+  chapter     Int?
+  lessonOrder Int      @default(0) @map("lesson_order")
+  lessonDate  DateTime? @map("lesson_date")
+  audioUrl    String?  @map("audio_url")
+  sourceFileUrl String? @map("source_file_url")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student  Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject  Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  homeworks Homework[]
+
+  @@map("lessons")
+}
+
+model Homework {
+  id              String         @id @default(uuid())
+  studentId       String         @map("student_id")
+  subjectId       String         @map("subject_id")
+  lessonId        String?        @map("lesson_id")
+  title           String
+  description     String?        @db.Text
+  dueDate         DateTime       @map("due_date")
+  status          HomeworkStatus @default(PENDING)
+  submittedAt     DateTime?      @map("submitted_at")
+  grade           Float?
+  feedback        String?        @db.Text
+  attachmentUrl   String?        @map("attachment_url")
+  aiExplanation   String?        @db.Text @map("ai_explanation")
+  aiGuidedSolution String?      @db.Text @map("ai_guided_solution")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  lesson  Lesson?  @relation(fields: [lessonId], references: [id])
+
+  @@map("homeworks")
+}
+
+model Quiz {
+  id          String   @id @default(uuid())
+  subjectId   String   @map("subject_id")
+  title       String
+  description String?
+  type        QuizType @default(DAILY)
+  questions   Json
+  totalMarks  Int      @map("total_marks")
+  timeLimit   Int?     @map("time_limit")
+  weekNumber  Int?     @map("week_number")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  subject  Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  attempts QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizAttempt {
+  id             String   @id @default(uuid())
+  quizId         String   @map("quiz_id")
+  studentId      String   @map("student_id")
+  answers        Json
+  score          Float
+  totalCorrect   Int      @map("total_correct")
+  totalQuestions Int      @map("total_questions")
+  timeTaken      Int?     @map("time_taken")
+  feedback       Json?
+  completedAt    DateTime @default(now()) @map("completed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  quiz    Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_attempts")
+}
+
+model Grade {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  subjectId String   @map("subject_id")
+  title     String
+  category  String
+  score     Float
+  maxScore  Float    @default(100) @map("max_score")
+  weight    Float    @default(1.0)
+  notes     String?
+  gradedAt  DateTime @default(now()) @map("graded_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("grades")
+}
+
+model Holiday {
+  id          String      @id @default(uuid())
+  nameAr      String      @map("name_ar")
+  nameEn      String?     @map("name_en")
+  startDate   DateTime    @map("start_date")
+  endDate     DateTime    @map("end_date")
+  holidayType HolidayType @default(NATIONAL) @map("holiday_type")
+  note        String?
+  isActive    Boolean     @default(true) @map("is_active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("holidays")
+}
+
+model Badge {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  nameAr      String  @map("name_ar")
+  nameEn      String? @map("name_en")
+  descriptionAr String? @map("description_ar")
+  icon        String
+  category    String
+  requirement Json?
+  pointsValue Int     @default(0) @map("points_value")
+  sortOrder   Int     @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  studentBadges StudentBadge[]
+
+  @@map("badges")
+}
+
+model StudentBadge {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  badgeId   String   @map("badge_id")
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  badge   Badge   @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, badgeId])
+  @@map("student_badges")
+}
+
+model WeaknessArea {
+  id          String    @id @default(uuid())
+  studentId   String    @map("student_id")
+  subjectId   String    @map("subject_id")
+  topic       String
+  description String?
+  severity    Int       @default(1)
+  isResolved  Boolean   @default(false) @map("is_resolved")
+  drillCount  Int       @default(0) @map("drill_count")
+  lastScore   Float?    @map("last_score")
+  recommendation String?
+  detectedAt  DateTime  @default(now()) @map("detected_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("weakness_areas")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  title       String
+  message     String
+  type        NotificationType @default(SYSTEM)
+  isRead      Boolean          @default(false) @map("is_read")
+  data        Json?
+  scheduledFor DateTime?       @map("scheduled_for")
+  sentAt      DateTime?        @map("sent_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String?
+  entityId  String?  @map("entity_id")
+  details   Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
