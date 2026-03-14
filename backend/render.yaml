@@ -3,8 +3,8 @@ services:
     name: study-world-api
     runtime: node
     plan: free
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npm start
+    buildCommand: npm install && npm run build
+    startCommand: npx prisma migrate deploy && node dist/index.js
     envVars:
       - key: DATABASE_URL
         fromDatabase:
